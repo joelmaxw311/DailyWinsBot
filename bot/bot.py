@@ -129,7 +129,7 @@ async def generate_plot(context, players):
     f.write(config)
     f.close()
     # generate plot with gnuplot and redirect the output to a .png file
-    f = open(result_path, "a")
+    f = open(result_path, "w")
     status = subprocess.call(["gnuplot", config_path], stdout=f)
     f.close()
     # post the image to Discord
