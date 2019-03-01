@@ -149,6 +149,8 @@ async def plot_wins(context, players):
 
 
 def is_status_running():
+    if not os.path.exists('service'):
+        return False
     f = open('service', 'r')
     status = f.read()
     f.close()
@@ -156,7 +158,7 @@ def is_status_running():
 
 
 def write_status(status):
-    f = open('service', 'w')
+    f = open('service', 'a')
     f.write(status)
     f.close()
 
@@ -174,7 +176,7 @@ async def status_test():
     status = f.read()
     if status == 'exit':
         print('Logging out...')
-        await client.close()
+        client.close()
     f.close()
 
 
