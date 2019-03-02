@@ -43,6 +43,10 @@ set ytics 1
 set title "Daily Wins"
 set key below
 set grid
+
+set boxwidth 0.5
+set style fill solid
+
 plot """
     plots = []
     for player in players:
