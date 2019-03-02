@@ -136,18 +136,14 @@ async def status_test():
     f.close()
 
 
-async def save_database():
-    winsDB.save()
-
-
 def record_wins_on_date(context, delta, players, date):
     print(f"Transacting {delta} wins for {', '.join(players)} on {date.month}/{date.day}/{date.year}")
     for player in players:
         winsDB.put(date, player, delta, *sorted(players))
-    save_database()
+    winsDB.save()
     client.send_message(context.message.channel,
-                        f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
-                        f"for the following players: {', '.join(players)}")
+                              f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
+                              f"for the following players: {', '.join(players)}")
 
 
 def record_wins(context, delta, players):
@@ -204,7 +200,7 @@ async def cmd_addwins(context, count, *players):
     if count > 0:
         record_wins(context, count, players)
     else:
-        client.send_message(context.message.channel, "Cannot add fewer than 1 win.")
+        await client.send_message(context.message.channel, "Cannot add fewer than 1 win.")
 
 
 @client.command(name='editwins',
@@ -217,7 +213,7 @@ async def cmd_editwins(context, count, player, date):
     if count != 0:
         record_wins_on_date(context, count, *player, date)
     else:
-        client.send_message(context.message.channel, "Cannot add or remove 0 wins.")
+        await client.send_message(context.message.channel, "Cannot add or remove 0 wins.")
 
 
 @client.command(name='listwins',
@@ -227,14 +223,16 @@ async def cmd_editwins(context, count, player, date):
                 pass_context=True)
 async def cmd_listwins(context, *players):
     if len(players) == 0:
-        players = winsDB.query(f"SELECT DISTINCT player FROM wins;")
+        players = []
+        for player in winsDB.query(f"SELECT DISTINCT player FROM wins;"):
+            players.append(player[0])
     print(players)
     message = '```'
     message += "%-20s %-6s\n" % ('Player', 'Wins')
     for player in players:
         data = winsDB.query(f"SELECT SUM(wins) FROM wins "
-                            f"WHERE player='{player[0]}';")
-        message += " %-20s %-6s\n" % (player[0], data[0][0])
+                            f"WHERE player='{player}';")
+        message += " %-20s %-6s\n" % (player, data[0][0])
     message += '```'
     await client.send_message(context.message.channel, message)
 

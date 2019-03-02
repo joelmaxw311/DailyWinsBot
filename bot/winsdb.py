@@ -2,10 +2,6 @@
 import MySQLdb as SQL
 
 
-def quote(text):
-    return f"'{text}'"
-
-
 class Date:
     def __init__(self, year, month, day):
         self.year = year
@@ -31,18 +27,27 @@ class WinsDB:
         self.db.rollback()
 
     def put(self, date, player, wins, *squad):
+        def quote(text):
+            return f", '{text}'"
         squad = sorted(squad)
-        self.curs.execute(f"INSERT INTO wins (date, player, wins, squad1, squad2, squad3) "
-                          f"values('{Date.pretty(date)}', '{player}', {wins}, "
-                          f"{quote(squad[0]) if len(squad) > 0 else None}, "
-                          f"{quote(squad[1]) if len(squad) > 1 else None}, "
-                          f"{quote(squad[2]) if len(squad) > 2 else None})")
+        q = (f"INSERT INTO wins (date, player, wins"
+             f"{', squad1' if len(squad) > 0 else ''}"
+             f"{', squad2' if len(squad) > 1 else ''}"
+             f"{', squad3' if len(squad) > 2 else ''}"
+             f") "
+             f"values('{date}', '{player}', {wins}"
+             f"{quote(squad[0]) if len(squad) > 0 else ''}"
+             f"{quote(squad[1]) if len(squad) > 1 else ''}"
+             f"{quote(squad[2]) if len(squad) > 2 else ''})")
+        print(q)
+        self.curs.execute(q)
 
     def get(self, *fields):
         self.curs.execute(f"SELECT {', '.join(fields)} FROM wins")
         return self.curs.fetchall()
 
     def query(self, query):
+        print(query)
         self.curs.execute(query)
         return self.curs.fetchall()
 
