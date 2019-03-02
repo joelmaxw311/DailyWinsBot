@@ -136,20 +136,19 @@ async def status_test():
     f.close()
 
 
-def record_wins_on_date(context, delta, players, date):
+async def record_wins_on_date(context, delta, players, date):
     print(f"Transacting {delta} wins for {', '.join(players)} on {date.month}/{date.day}/{date.year}")
     for player in players:
         winsDB.put(date, player, delta, *sorted(players))
     winsDB.save()
-    client.send_message(context.message.channel,
-                        f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
-                        f"for the following players: {', '.join(players)}")
+    await client.send_message(context.message.channel, f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
+                                                       f"for the following players: {', '.join(players)}")
 
 
-def record_wins(context, delta, players):
+async def record_wins(context, delta, players):
     d = datetime.datetime.today()
     date = winsdb.Date(d.year, d.month, d.day)
-    record_wins_on_date(context, delta, players, date)
+    await record_wins_on_date(context, delta, players, date)
 
 
 async def list_servers():
@@ -198,7 +197,7 @@ def start_bot(token):
 async def cmd_addwins(context, count, *players):
     count = int(count)
     if count > 0:
-        record_wins(context, count, players)
+        await record_wins(context, count, players)
     else:
         await client.send_message(context.message.channel, "Cannot add fewer than 1 win.")
 
@@ -211,7 +210,7 @@ async def cmd_addwins(context, count, *players):
 async def cmd_editwins(context, count, player, date):
     count = int(count)
     if count != 0:
-        record_wins_on_date(context, count, *player, date)
+        await record_wins_on_date(context, count, *player, date)
     else:
         await client.send_message(context.message.channel, "Cannot add or remove 0 wins.")
 
