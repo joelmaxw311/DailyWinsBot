@@ -44,13 +44,19 @@ set title "Daily Wins"
 set key below
 set grid
 
-set boxwidth 0.5
+set boxwidth {86400 / max(1, len(players))}
 set style fill solid
 
 plot """
     plots = []
+    i = 0
     for player in players:
-        plots.append(f'"{data_path}{player}.csv" using 1:2 title "{player}" with {plot_type}')
+        plots.append(f'"{data_path}{player}.csv" '
+                     f'every {len(players)}::{i} '
+                     f'using 1:2 '
+                     f'title "{player}" '
+                     f'with {plot_type}')
+        i += 1
     config += ', '.join(plots)
     return config
 
