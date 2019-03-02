@@ -233,8 +233,8 @@ async def cmd_listwins(context, *players):
     message += "%-20s %-6s\n" % ('Player', 'Wins')
     for player in players:
         data = winsDB.query(f"SELECT SUM(wins) FROM wins "
-                            f"WHERE player='{player}';")
-        message += " %-20s %-6s\n" % (player, data[0][0])
+                            f"WHERE player='{player[0]}';")
+        message += " %-20s %-6s\n" % (player[0], data[0][0])
     message += '```'
     await client.send_message(context.message.channel, message)
 
