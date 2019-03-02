@@ -23,7 +23,7 @@ winsDB = winsdb.WinsDB('localhost', 'monitor', 'password', 'dailywins')
 client = Bot(command_prefix=BOT_PREFIX)
 
 
-def plot_configuration(max_wins, players, data_path=''):
+def plot_configuration(max_wins, players, data_path='', plot_type='linespoints'):
     config = f"""# gnuplot script file for wins per day
 #!/usr/bin/gnuplot
 reset
@@ -46,7 +46,7 @@ set grid
 plot """
     plots = []
     for player in players:
-        plots.append(f'"{data_path}{player}.csv" using 1:2 title "{player}" with linespoints')
+        plots.append(f'"{data_path}{player}.csv" using 1:2 title "{player}" with {plot_type}')
     config += ', '.join(plots)
     return config
 
@@ -75,7 +75,7 @@ async def generate_plot(context, players):
                 f.write(', '.join((str(date), str(wins))) + '\n')
             f.close()
     # write gnuplot configuration to a .gp file
-    config = plot_configuration(max_wins, players, data_path)
+    config = plot_configuration(max_wins, players, data_path, 'boxes')
     f = open(config_path, 'w')
     f.write(config)
     f.close()
