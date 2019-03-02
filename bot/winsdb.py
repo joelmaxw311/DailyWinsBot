@@ -11,7 +11,7 @@ class Date:
         self.year = year
         self.month = month
         self.day = day
-    
+
     def __str__(self):
         return f"{self.year:04d}-{self.month:02d}-{self.day:02d}"
 
@@ -44,4 +44,18 @@ class WinsDB:
 
     def query(self, query):
         self.curs.execute(query)
+        return self.curs.fetchall()
+
+    def plot(self, player):
+        self.curs.execute(f"SELECT p.date, p.player, COALESCE(SUM(a.wins), 0) wins "
+                          f"FROM ( "
+                          f"    SELECT date, player FROM ( "
+                          f"        SELECT player "
+                          f"        FROM wins "
+                          f"        WHERE player='{player}' "
+                          f"        GROUP BY player "
+                          f"    ) q CROSS JOIN ( SELECT DISTINCT date FROM wins) b  "
+                          f") p LEFT JOIN wins a "
+                          f"ON p.player = a.player AND p.date = a.date  "
+                          f"GROUP BY date, player ORDER BY date, player;")
         return self.curs.fetchall()

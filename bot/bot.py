@@ -44,16 +44,13 @@ set title "Daily Wins"
 set key below
 set grid
 
-set boxwidth {86400 / max(1, len(players))}
-set style fill solid
-
 plot """
     plots = []
     i = 0
+    print(len(players))
     for player in players:
         plots.append(f'"{data_path}{player}.csv" '
-                     f'every {len(players)}::{i} '
-                     f'using 1:2 '
+                     f'u 1:2 '
                      f'title "{player}" '
                      f'with {plot_type}')
         i += 1
@@ -73,19 +70,17 @@ async def generate_plot(context, players):
     # compile wins per day for selected players, and find the highest wins per day for any player
     selection = "player='" + "' OR player='".join(players) + "'"
     max_wins = winsDB.query(f"SELECT MAX(SumWins) FROM (SELECT SUM(wins) as SumWins FROM wins "
-                            f"WHERE {selection} GROUP BY date) as SumWinsTable;")[0][0]
+                            f"WHERE {selection} GROUP BY player, date) as SumWinsTable;")[0][0]
     print(max_wins)
     pattern = re.compile("^[A-Za-z0-9 ]+$")
+    # if pattern.match(player):
     for player in players:
-        if pattern.match(player):
-            f = open(data_path + player + '.csv', 'w')
-            for date, wins in winsDB.query(f"SELECT date, SUM(wins) FROM wins "
-                                           f"WHERE player='{player}' GROUP BY date;"):
-                # write wins/date for this player to a .csv file
-                f.write(', '.join((str(date), str(wins))) + '\n')
-            f.close()
+        f = open(data_path + player + '.csv', 'w')
+        for date, p, wins in winsDB.plot(player):
+            f.write(f"{date}, {wins}\n")
+        f.close()
     # write gnuplot configuration to a .gp file
-    config = plot_configuration(max_wins, players, data_path, 'boxes')
+    config = plot_configuration(max_wins, players, data_path, 'linespoints')
     f = open(config_path, 'w')
     f.write(config)
     f.close()
@@ -238,8 +233,8 @@ async def cmd_listwins(context, *players):
     message += "%-20s %-6s\n" % ('Player', 'Wins')
     for player in players:
         data = winsDB.query(f"SELECT SUM(wins) FROM wins "
-                            f"WHERE player='{player[0]}';")
-        message += " %-20s %-6s\n" % (player[0], data[0][0])
+                            f"WHERE player='{player}';")
+        message += " %-20s %-6s\n" % (player, data[0][0])
     message += '```'
     await client.send_message(context.message.channel, message)
 
