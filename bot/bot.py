@@ -142,8 +142,8 @@ def record_wins_on_date(context, delta, players, date):
         winsDB.put(date, player, delta, *sorted(players))
     winsDB.save()
     client.send_message(context.message.channel,
-                              f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
-                              f"for the following players: {', '.join(players)}")
+                        f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
+                        f"for the following players: {', '.join(players)}")
 
 
 def record_wins(context, delta, players):
@@ -231,7 +231,7 @@ async def cmd_listwins(context, *players):
     message += "%-20s %-6s\n" % ('Player', 'Wins')
     for player in players:
         data = winsDB.query(f"SELECT SUM(wins) FROM wins "
-                            f"WHERE player='{player}';")
+                            f"WHERE player like '{player}';")
         message += " %-20s %-6s\n" % (player, data[0][0])
     message += '```'
     await client.send_message(context.message.channel, message)
@@ -244,11 +244,12 @@ async def cmd_listwins(context, *players):
                 pass_context=True)
 async def cmd_history(context, player):
     message = '```History of wins for ' + player + '\n'
-    message += "%-9s %-6s\n" % ('Date', 'Wins')
-    data = winsDB.query(f"SELECT date, wins FROM wins "
+    message += f"{'Date':<12} {'Wins':<6} {'Squad':<12}\n"
+    data = winsDB.query(f"SELECT date, wins, squad1, squad2, squad3 FROM wins "
                         f"WHERE player='{player}';")
-    for entry in data:
-        message += "%-9s %-6s\n" % (entry[0], entry[1])
+    for date, wins, squad1, squad2, squad3 in data:
+        message += f"{str(date):<12} {wins:<6} " \
+                   f"{squad1 if squad1 else '':<12} {squad2 if squad2 else '':<12} {squad3 if squad3 else '':<12}\n"
     message += '```'
     await client.send_message(context.message.channel, message)
 
