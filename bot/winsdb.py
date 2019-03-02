@@ -1,5 +1,9 @@
-#!/usr/bin/env python -u
+#!/usr/bin/env python3 -u
 import MySQLdb as SQL
+
+
+def quote(text):
+    return f"'{text}'"
 
 
 class Date:
@@ -7,6 +11,12 @@ class Date:
         self.year = year
         self.month = month
         self.day = day
+    
+    def __str__(self):
+        return f"{self.year:04d}-{self.month:02d}-{self.day:02d}"
+
+    def pretty(self):
+        return f"{self.month}/{self.day}/{self.year}"
 
 
 class WinsDB:
@@ -23,10 +33,10 @@ class WinsDB:
     def put(self, date, player, wins, *squad):
         squad = sorted(squad)
         self.curs.execute(f"INSERT INTO wins (date, player, wins, squad1, squad2, squad3) "
-                          f"values('{date.year:04d}-{date.month:02d}-{date.day:02d}', '{player}', {wins}, "
-                          f"'{(squad[0] if len(squad) > 0 else None)}', "
-                          f"'{(squad[1] if len(squad) > 1 else None)}', "
-                          f"'{(squad[2] if len(squad) > 2 else None)}')")
+                          f"values('{Date.pretty(date)}', '{player}', {wins}, "
+                          f"{quote(squad[0]) if len(squad) > 0 else None}, "
+                          f"{quote(squad[1]) if len(squad) > 1 else None}, "
+                          f"{quote(squad[2]) if len(squad) > 2 else None})")
 
     def get(self, *fields):
         self.curs.execute(f"SELECT {', '.join(fields)} FROM wins")

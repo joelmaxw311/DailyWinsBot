@@ -1,4 +1,4 @@
-#!/usr/bin/env python -u
+#!/usr/bin/env python3 -u
 # Work with Python 3.6
 import random
 import time
@@ -18,82 +18,35 @@ import winsdb
 
 BOT_PREFIX = ("?", "!")
 
-save_lock = False
 plot_queue = []
-db_path = 'db/'
-database_path = db_path + 'database.txt'
-history_path = db_path + 'history.txt'
-
 winsDB = winsdb.WinsDB('localhost', 'monitor', 'password', 'dailywins')
-# history = []
-
 client = Bot(command_prefix=BOT_PREFIX)
 
 
-def check_db_path():
-    if not os.path.exists(db_path):
-        os.makedirs(db_path)
-
-
-def load_database():
-    global database_path
-    db = {}
-    try:
-        check_db_path()
-        f = open(database_path, 'r')
-        db = json.loads(f.read())
-        f.close()
-        print("Loaded database from file")
-    except:
-        print("Failed to load database from file")
-    return db
-
-
-def load_history():
-    global history_path
-    hist = []
-    try:
-        f = open(history_path, 'r')
-        hist = json.loads(f.read())
-        f.close()
-        print("Loaded history from file")
-    except:
-        print("Failed to load history from file")
-    return hist
-
-
-# def load_all_saved_data():
-    # global winsDB
-    # global history
-    # winsDB = load_database()
-    # history = load_history()
-
-
 def plot_configuration(max_wins, players, data_path=''):
-    config = """# gnuplot script file for wins per day
+    config = f"""# gnuplot script file for wins per day
 #!/usr/bin/gnuplot
 reset
 set terminal png
 
 set xdata time
 set timefmt "%Y-%m-%d"
-set format x "%m/%d" """
-    config += """
+set format x "%m/%d"
 set xlabel "Date (month/day)"
 set ylabel "Wins"
 
 set xrange [*:*]
-set yrange [0:%s]
+set yrange [0:{max_wins + 1}]
 set xtics 86400
-set ytics 1 """ % (max_wins + 1)
-    config += """
+set ytics 1
+
 set title "Daily Wins"
 set key below
 set grid
 plot """
     plots = []
     for player in players:
-        plots.append('"%s.csv" using 1:2 title "%s" with linespoints' % (data_path + player, player))
+        plots.append(f'"{data_path}{player}.csv" using 1:2 title "{player}" with linespoints')
     config += ', '.join(plots)
     return config
 
@@ -137,7 +90,7 @@ async def generate_plot(context, players):
         await client.send_message(context.message.channel, 'Whoops! There was a problem generating the plot.')
 
 
-async def plot_wins(context, players):
+async def request_plot(context, players):
     plot_queue.append((context, players))
     if len(plot_queue) > 1:
         return
@@ -179,60 +132,23 @@ async def status_test():
 
 
 async def save_database():
-    global save_lock
-    global database_path
-    global history_path
-    if not save_lock:
-        save_lock = True
-        # f = open(database_path, 'w')
-        # f.write(json.dumps(winsDB, indent=4, sort_keys=True))
-        # f.close()
-        # f = open(history_path, "w")
-        # f.write(json.dumps(history, indent=4, sort_keys=True))
-        # f.close()
-        save_lock = False
+    winsDB.save()
 
 
-def log_change(user, delta, players):
-    d = datetime.datetime.today()
-    date = winsdb.Date(d.year, d.month, d.day)
+def record_wins_on_date(context, delta, players, date):
+    print(f"Transacting {delta} wins for {', '.join(players)} on {date.month}/{date.day}/{date.year}")
     for player in players:
         winsDB.put(date, player, delta, *sorted(players))
-        # history.append(entry)
     save_database()
-    
+    client.send_message(context.message.channel,
+                        f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
+                        f"for the following players: {', '.join(players)}")
 
-async def addWins(context, count, *players):
-    if count < 0:
-        print('Cannot add negative wins')
-        return
-    # log_change(context.message.author, count, players)
+
+def record_wins(context, delta, players):
     d = datetime.datetime.today()
-    for player in players:
-        winsDB.put(winsdb.Date(d.year, d.month, d.day), player, count, *players)
-        print("Added " + str(count) + " wins for " + player + ':')
-        await client.send_message(context.message.channel, "Added " + str(count) + " wins for " + player)
-    client.loop.create_task(save_database())
-    return
-
-
-async def subtractWins(context, count, *players):
-    if count < 0:
-        print('Cannot subtract negative wins')
-        return
-    d = datetime.datetime.today()
-    for player in players:
-        val = winsDB.get(player, 0)
-        if val < count:
-            print(str(player) + 'does not have enough wins to subtract ' + str(count))
-            return
-    # log_change(context.message.author, -count, players)
-    for player in players:
-        winsDB.put(winsdb.Date(d.year, d.month, d.day), player, -count)
-        print("Subtracted " + str(count) + " wins from " + player)
-        await client.send_message(context.message.channel, "Subtracted " + str(count) + " wins from " + player)
-    client.loop.create_task(save_database())
-    return
+    date = winsdb.Date(d.year, d.month, d.day)
+    record_wins_on_date(context, delta, players, date)
 
 
 async def list_servers():
@@ -275,32 +191,28 @@ def start_bot(token):
 
 @client.command(name='addwins',
                 description="Add wins for a list of players.",
-                brief="Edit the wins database",
+                brief="Add records to the wins database",
                 aliases=['add'],
                 pass_context=True)
 async def cmd_addwins(context, count, *players):
     count = int(count)
     if count > 0:
-        await addWins(context, count, *players)
-    elif count < 0:
-        await subtractWins(context, count, *players)
+        record_wins(context, count, players)
     else:
-        await client.send_message(context.message.channel, "Cannot add 0 wins.")
+        client.send_message(context.message.channel, "Cannot add fewer than 1 win.")
 
 
-@client.command(name='subwins',
-                description="Subtract wins for a list of players.",
-                brief="Edit the wins database",
-                aliases=['sub'],
+@client.command(name='editwins',
+                description="Add or subtract wins for player on a date.",
+                brief="Adjust records in the wins database",
+                aliases=['edit'],
                 pass_context=True)
-async def cmd_subwins(context, count, *players):
+async def cmd_editwins(context, count, player, date):
     count = int(count)
-    if count < 0:
-        await addWins(context, count, *players)
-    elif count > 0:
-        await subtractWins(context, count, *players)
+    if count != 0:
+        record_wins_on_date(context, count, *player, date)
     else:
-        await client.send_message(context.message.channel, "Cannot remove 0 wins.")
+        client.send_message(context.message.channel, "Cannot add or remove 0 wins.")
 
 
 @client.command(name='listwins',
@@ -343,7 +255,7 @@ async def cmd_history(context, player):
                 brief="Graph wins",
                 pass_context=True)
 async def cmd_plot(context, *players):
-    client.loop.create_task(plot_wins(context, players))
+    client.loop.create_task(request_plot(context, players))
 
 
 @client.event

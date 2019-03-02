@@ -108,3 +108,5 @@ plot/
 db/
 
 service
+
+\.idea/
