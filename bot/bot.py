@@ -241,11 +241,14 @@ async def cmd_listwins(context, *players):
                 brief="View the wins database",
                 aliases=['winlog'],
                 pass_context=True)
-async def cmd_history(context, player):
-    message = '```History of wins for ' + player + '\n'
+async def cmd_history(context, player=None):
+    message = f'```History of wins for {player if player else "squads"}\n'
     message += f"{'Date':<12} {'Wins':<6} {'Squad':<12}\n"
-    data = winsDB.query(f"SELECT date, wins, squad1, squad2, squad3 FROM wins "
-                        f"WHERE player='{player}';")
+    if player:
+        data = winsDB.query(f"SELECT date, wins, squad1, squad2, squad3 FROM wins "
+                            f"WHERE player='{player}';")
+    else:
+        data = winsDB.query(f"SELECT * FROM dailywins.squad_history;")
     for date, wins, squad1, squad2, squad3 in data:
         message += f"{str(date):<12} {wins:<6} " \
                    f"{squad1 if squad1 else '':<12} {squad2 if squad2 else '':<12} {squad3 if squad3 else '':<12}\n"
