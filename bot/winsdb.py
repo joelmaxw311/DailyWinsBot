@@ -1,7 +1,6 @@
 #!/usr/bin/env python3 -u
 import MySQLdb as SQL
 
-
 class Date:
     def __init__(self, year, month, day):
         self.year = year
@@ -17,8 +16,15 @@ class Date:
 
 class WinsDB:
     def __init__(self, host, user, password, database):
+        self.host = host;
+        self.user = user;
+        self.password = password;
+        self.database = database;
         self.db = SQL.connect(host, user, password, database)
         self.curs = self.db.cursor()
+
+    def refresh(self):
+        self.db = SQL.connect(self.host, self.user, self.password, self.database)
 
     def save(self):
         self.db.commit()
@@ -43,15 +49,18 @@ class WinsDB:
         self.curs.execute(q)
 
     def get(self, *fields):
+        self.refresh()
         self.curs.execute(f"SELECT {', '.join(fields)} FROM wins")
         return self.curs.fetchall()
 
     def query(self, query):
         print(query)
+        self.refresh()
         self.curs.execute(query)
         return self.curs.fetchall()
 
     def plot(self, player):
+        self.refresh()
         self.curs.execute(f"SELECT p.date, p.player, COALESCE(SUM(a.wins), 0) wins "
                           f"FROM ( "
                           f"    SELECT date, player FROM ( "
