@@ -31,3 +31,7 @@ class WinsDB:
     def get(self, *fields):
         self.curs.execute(f"SELECT {', '.join(fields)} FROM wins")
         return self.curs.fetchall()
+
+    def query(self, query):
+        self.curs.execute(query)
+        return self.curs.fetchall()

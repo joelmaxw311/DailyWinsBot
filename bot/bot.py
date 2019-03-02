@@ -14,6 +14,7 @@ from discord.ext.commands import Bot
 import sys
 import os
 import re
+import winsdb
 
 BOT_PREFIX = ("?", "!")
 
@@ -23,8 +24,8 @@ db_path = 'db/'
 database_path = db_path + 'database.txt'
 history_path = db_path + 'history.txt'
 
-winsDB = {}
-history = []
+winsDB = winsdb.WinsDB('localhost', 'monitor', 'password', 'dailywins')
+# history = []
 
 client = Bot(command_prefix=BOT_PREFIX)
 
@@ -61,11 +62,11 @@ def load_history():
     return hist
 
 
-def load_all_saved_data():
-    global winsDB
-    global history
-    winsDB = load_database()
-    history = load_history()
+# def load_all_saved_data():
+    # global winsDB
+    # global history
+    # winsDB = load_database()
+    # history = load_history()
 
 
 def plot_configuration(max_wins, players, data_path=''):
@@ -75,7 +76,7 @@ reset
 set terminal png
 
 set xdata time
-set timefmt "%m/%d/%Y"
+set timefmt "%Y-%m-%d"
 set format x "%m/%d" """
     config += """
 set xlabel "Date (month/day)"
@@ -107,22 +108,19 @@ async def generate_plot(context, players):
     if not os.path.exists(data_path):
         os.makedirs(data_path)
     # compile wins per day for selected players, and find the highest wins per day for any player
-    max_wins = 0
+    selection = "player='" + "' OR player='".join(players) + "'"
+    max_wins = winsDB.query(f"SELECT MAX(SumWins) FROM (SELECT SUM(wins) as SumWins FROM wins "
+                            f"WHERE {selection} GROUP BY date) as SumWinsTable;")[0][0]
+    print(max_wins)
     pattern = re.compile("^[A-Za-z0-9 ]+$")
     for player in players:
         if pattern.match(player):
-            data = {}
-            # group win count entries by date
-            for entry in history:
-                if entry['player'] == player:
-                    data[entry['date']] = data.get(entry['date'], 0) + entry['wins']
-            # write wins/date for this player to a .csv file
             f = open(data_path + player + '.csv', 'w')
-            for date, wins in data.items():
-                f.write(', '.join((date, str(wins))) + '\n')
+            for date, wins in winsDB.query(f"SELECT date, SUM(wins) FROM wins "
+                                           f"WHERE player='{player}' GROUP BY date;"):
+                # write wins/date for this player to a .csv file
+                f.write(', '.join((str(date), str(wins))) + '\n')
             f.close()
-            # find max_wins
-            max_wins = max(max_wins, *data.values())
     # write gnuplot configuration to a .gp file
     config = plot_configuration(max_wins, players, data_path)
     f = open(config_path, 'w')
@@ -186,26 +184,21 @@ async def save_database():
     global history_path
     if not save_lock:
         save_lock = True
-        f = open(database_path, 'w')
-        f.write(json.dumps(winsDB, indent=4, sort_keys=True))
-        f.close()
-        f = open(history_path, "w")
-        f.write(json.dumps(history, indent=4, sort_keys=True))
-        f.close()
+        # f = open(database_path, 'w')
+        # f.write(json.dumps(winsDB, indent=4, sort_keys=True))
+        # f.close()
+        # f = open(history_path, "w")
+        # f.write(json.dumps(history, indent=4, sort_keys=True))
+        # f.close()
         save_lock = False
 
 
 def log_change(user, delta, players):
     d = datetime.datetime.today()
+    date = winsdb.Date(d.year, d.month, d.day)
     for player in players:
-        entry = {
-            'user': user.name + '#' + user.discriminator,
-            'wins': delta,
-            'date': '%s/%s/%s' % (d.month, d.day, d.year),
-            'player': player,
-            'squad': sorted(players)
-        }
-        history.append(entry)
+        winsDB.put(date, player, delta, *sorted(players))
+        # history.append(entry)
     save_database()
     
 
@@ -213,10 +206,10 @@ async def addWins(context, count, *players):
     if count < 0:
         print('Cannot add negative wins')
         return
-    log_change(context.message.author, count, players)
+    # log_change(context.message.author, count, players)
+    d = datetime.datetime.today()
     for player in players:
-        oldval = winsDB.get(player, 0)
-        winsDB[player] = oldval + count
+        winsDB.put(winsdb.Date(d.year, d.month, d.day), player, count, *players)
         print("Added " + str(count) + " wins for " + player + ':')
         await client.send_message(context.message.channel, "Added " + str(count) + " wins for " + player)
     client.loop.create_task(save_database())
@@ -227,15 +220,15 @@ async def subtractWins(context, count, *players):
     if count < 0:
         print('Cannot subtract negative wins')
         return
+    d = datetime.datetime.today()
     for player in players:
         val = winsDB.get(player, 0)
         if val < count:
             print(str(player) + 'does not have enough wins to subtract ' + str(count))
             return
-    log_change(context.message.author, -count, players)
+    # log_change(context.message.author, -count, players)
     for player in players:
-        oldval = winsDB.get(player, 0)
-        winsDB[player] = oldval - count
+        winsDB.put(winsdb.Date(d.year, d.month, d.day), player, -count)
         print("Subtracted " + str(count) + " wins from " + player)
         await client.send_message(context.message.channel, "Subtracted " + str(count) + " wins from " + player)
     client.loop.create_task(save_database())
@@ -272,7 +265,7 @@ def stop_bot():
 
 
 def start_bot(token):
-    load_all_saved_data()
+    # load_all_saved_data()
     if is_status_running():
         print("WARNING: Bot may already be running in another process")
     client.loop.create_task(list_servers())
@@ -317,11 +310,14 @@ async def cmd_subwins(context, count, *players):
                 pass_context=True)
 async def cmd_listwins(context, *players):
     if len(players) == 0:
-        players = winsDB.keys()
+        players = winsDB.query(f"SELECT DISTINCT player FROM wins;")
+    print(players)
     message = '```'
     message += "%-20s %-6s\n" % ('Player', 'Wins')
     for player in players:
-        message += " %-20s %-6s\n" % (player, winsDB[player])
+        data = winsDB.query(f"SELECT SUM(wins) FROM wins "
+                            f"WHERE player='{player[0]}';")
+        message += " %-20s %-6s\n" % (player[0], data[0][0])
     message += '```'
     await client.send_message(context.message.channel, message)
 
@@ -333,10 +329,11 @@ async def cmd_listwins(context, *players):
                 pass_context=True)
 async def cmd_history(context, player):
     message = '```History of wins for ' + player + '\n'
-    message += "%-6s %-9s %-20s %s\n" % ('Wins', 'Date', 'Recorded by', 'Squad')
-    for entry in history:
-        if entry['player'] == player:
-            message += "%-6s %-9s %-20s %s\n" % (entry['wins'], entry['date'], entry['user'], ', '.join(entry['squad']))
+    message += "%-9s %-6s\n" % ('Date', 'Wins')
+    data = winsDB.query(f"SELECT date, wins FROM wins "
+                        f"WHERE player='{player}';")
+    for entry in data:
+        message += "%-9s %-6s\n" % (entry[0], entry[1])
     message += '```'
     await client.send_message(context.message.channel, message)
 
@@ -345,7 +342,7 @@ async def cmd_history(context, player):
                 description="Generates a graph of the win history",
                 brief="Graph wins",
                 pass_context=True)
-async def cmd_history(context, *players):
+async def cmd_plot(context, *players):
     client.loop.create_task(plot_wins(context, players))
 
 
