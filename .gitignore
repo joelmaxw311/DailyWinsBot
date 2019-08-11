@@ -110,3 +110,5 @@ db/
 service
 
 \.idea/
+
+\.vscode/

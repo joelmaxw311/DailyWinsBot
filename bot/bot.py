@@ -19,7 +19,7 @@ import winsdb
 BOT_PREFIX = ("?", "!")
 
 plot_queue = []
-winsDB = winsdb.WinsDB('localhost', 'monitor', 'password', 'dailywins')
+winsDB = winsdb.WinsDB()
 client = Bot(command_prefix=BOT_PREFIX)
 
 
@@ -86,13 +86,13 @@ async def generate_plot(context, players):
     f.close()
     # generate plot with gnuplot and redirect the output to a .png file
     f = open(result_path, "w")
-    status = subprocess.call(["gnuplot", config_path], stdout=f)
+    status = subprocess.call(["bash", "-c", f"gnuplot {config_path}"], stdout=f)
     f.close()
     # post the image to Discord
     if status == 0:
-        await client.send_file(context.message.channel, result_path)
+        await context.message.channel.send(file=discord.File(result_path))
     else:
-        await client.send_message(context.message.channel, 'Whoops! There was a problem generating the plot.')
+        await context.message.channel.send('Whoops! There was a problem generating the plot.')
 
 
 async def request_plot(context, players):
@@ -132,6 +132,7 @@ async def status_test():
     status = f.read()
     if status == 'exit':
         print('Logging out...')
+        winsDB.close()
         client.close()
     f.close()
 
@@ -140,8 +141,7 @@ async def record_wins_on_date(context, delta, players, date):
     print(f"Transacting {delta} wins for {', '.join(players)} on {date.month}/{date.day}/{date.year}")
     for player in players:
         winsDB.put(date, player, delta, *sorted(players))
-    winsDB.save()
-    await client.send_message(context.message.channel, f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
+    await context.message.channel.send(f"Recorded {delta} wins on {date.month}/{date.day}/{date.year} "
                                                        f"for the following players: {', '.join(players)}")
 
 
@@ -177,6 +177,7 @@ def get_role(server, role_id):
 
 def stop_bot():
     status_exit()
+    winsDB.close()
     client.close()
 
 
@@ -199,7 +200,9 @@ async def cmd_addwins(context, count, *players):
     if count > 0:
         await record_wins(context, count, players)
     else:
-        await client.send_message(context.message.channel, "Cannot add fewer than 1 win.")
+        await context.message.channel.send("Cannot add fewer than 1 win.")
+    winsDB.save()
+    winsDB.refresh()
 
 
 @client.command(name='editwins',
@@ -212,7 +215,7 @@ async def cmd_editwins(context, count, player, date):
     if count != 0:
         await record_wins_on_date(context, count, *player, date)
     else:
-        await client.send_message(context.message.channel, "Cannot add or remove 0 wins.")
+        await context.message.channel.send("Cannot add or remove 0 wins.")
 
 
 @client.command(name='listwins',
@@ -233,7 +236,7 @@ async def cmd_listwins(context, *players):
                             f"WHERE player like '{player}';")
         message += " %-20s %-6s\n" % (player, data[0][0])
     message += '```'
-    await client.send_message(context.message.channel, message)
+    await context.message.channel.send(message)
 
 
 @client.command(name='history',
@@ -253,7 +256,7 @@ async def cmd_history(context, player=None):
         message += f"{str(date):<12} {wins:<6} " \
                    f"{squad1 if squad1 else '':<12} {squad2 if squad2 else '':<12} {squad3 if squad3 else '':<12}\n"
     message += '```'
-    await client.send_message(context.message.channel, message)
+    await context.message.channel.send(message)
 
 
 @client.command(name='plot',
@@ -266,7 +269,7 @@ async def cmd_plot(context, *players):
 
 @client.event
 async def on_ready():
-    await client.change_presence(game=Game(name="Apex Legends"))
+    await client.change_presence(activity=Game(name="Apex Legends"))
     print("Logged in as " + client.user.name)
 
 

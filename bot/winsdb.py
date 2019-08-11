@@ -1,5 +1,5 @@
 #!/usr/bin/env python3 -u
-import MySQLdb as SQL
+import sqlite3
 
 class Date:
     def __init__(self, year, month, day):
@@ -15,22 +15,46 @@ class Date:
 
 
 class WinsDB:
-    def __init__(self, host, user, password, database):
-        self.host = host;
-        self.user = user;
-        self.password = password;
-        self.database = database;
-        self.db = SQL.connect(host, user, password, database)
+    def __init__(self):
+        self.db = sqlite3.connect('wins.db')
         self.curs = self.db.cursor()
+        if not self.tableExists('wins'):
+            self.newDB()
+
+    def tableExists(self, tableName):
+        self.refresh()
+        self.curs.execute(f''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='{tableName}' ''')
+        return self.curs.fetchone()[0]==1
+
+    def newDB(self):
+        print("Initializing database")
+        self.refresh()
+        self.curs.execute("""--begin-sql
+CREATE TABLE wins (
+    date    DATE,
+    player  TEXT,
+    wins    INTEGER,
+    squad1  TEXT,
+    squad2  TEXT,
+    squad3  TEXT
+);""")
+        self.save()
 
     def refresh(self):
-        self.db = SQL.connect(self.host, self.user, self.password, self.database)
+        if self.db:
+            self.db.commit()
+            self.db.close()
+        self.db = sqlite3.connect('wins.db')
+        self.curs = self.db.cursor()
 
     def save(self):
         self.db.commit()
 
     def revert(self):
         self.db.rollback()
+
+    def close(self):
+        self.db.close()
 
     def put(self, date, player, wins, *squad):
         def quote(text):
@@ -47,6 +71,7 @@ class WinsDB:
              f"{quote(squad[2]) if len(squad) > 2 else ''})")
         print(q)
         self.curs.execute(q)
+        self.refresh()
 
     def get(self, *fields):
         self.refresh()
@@ -61,15 +86,16 @@ class WinsDB:
 
     def plot(self, player):
         self.refresh()
-        self.curs.execute(f"SELECT p.date, p.player, COALESCE(SUM(a.wins), 0) wins "
-                          f"FROM ( "
-                          f"    SELECT date, player FROM ( "
-                          f"        SELECT player "
-                          f"        FROM wins "
-                          f"        WHERE player='{player}' "
-                          f"        GROUP BY player "
-                          f"    ) q CROSS JOIN ( SELECT DISTINCT date FROM wins) b  "
-                          f") p LEFT JOIN wins a "
-                          f"ON p.player = a.player AND p.date = a.date  "
-                          f"GROUP BY date, player ORDER BY date, player;")
+        self.curs.execute(f"""--begin-sql
+SELECT p.date, p.player, COALESCE(SUM(a.wins), 0) wins
+FROM (
+    SELECT date, player FROM (
+        SELECT player
+        FROM wins
+        WHERE player='{player}'
+        GROUP BY player
+    ) q CROSS JOIN ( SELECT DISTINCT date FROM wins) b 
+) p LEFT JOIN wins a
+ON p.player = a.player AND p.date = a.date 
+GROUP BY p.date, p.player ORDER BY p.date, p.player;""")
         return self.curs.fetchall()
